@@ -6,9 +6,9 @@
 
 - **意图路由**：自动识别用户意图，路由到对应处理器
   - 支持两种路由引擎：Claude API 或 CodeBuddy SDK
-  - `ngs-product-qa`：电销系统产品问答（RAG + Claude）
+  - `ngs-product-qa`：电销系统产品问答（RAG + Claude/CodeBuddy）
   - `ngs-bug-fixer`：测试问题修复（CodeBuddy）
-  - `general-qa`：普通问答（Claude）
+  - `general-qa`：普通问答（Claude/CodeBuddy）
   - Router 失败时自动降级到 general-qa
 
 - **两种群聊模式**
@@ -38,7 +38,12 @@ FEISHU_MCP_URL=https://open.feishu.cn/mcp/stream/your_token_here
 # Router 引擎：claude 或 codebuddy（默认 claude）
 ROUTER_ENGINE=claude
 
-# Claude API（ROUTER_ENGINE=claude 时必填）
+# QA 引擎配置（可分别配置）
+QA_ENGINE=claude                    # 全局默认
+# PRODUCT_QA_ENGINE=codebuddy      # 产品问答专用
+# GENERAL_QA_ENGINE=claude         # 普通问答专用
+
+# Claude API（使用 Claude 引擎时必填）
 CLAUDE_API_KEY=sk-ant-xxx
 CLAUDE_BASE_URL=https://api.anthropic.com
 
@@ -86,6 +91,32 @@ npm start
 
 ## 配置说明
 
+### QA 引擎配置
+
+product-qa 和 general-qa 都支持两种引擎：
+
+- **Claude API**：快速、稳定，需要 `CLAUDE_API_KEY`
+- **CodeBuddy SDK**：高级能力，需要 CodeBuddy 登录
+
+配置优先级（从高到低）：
+1. 处理器专用变量（`PRODUCT_QA_ENGINE`、`GENERAL_QA_ENGINE`）
+2. 全局默认（`QA_ENGINE`）
+3. 默认值 `claude`
+
+示例配置：
+
+```env
+# 方案 1：全部使用 Claude
+QA_ENGINE=claude
+
+# 方案 2：产品问答用 CodeBuddy，普通问答用 Claude
+PRODUCT_QA_ENGINE=codebuddy
+GENERAL_QA_ENGINE=claude
+
+# 方案 3：全部使用 CodeBuddy
+QA_ENGINE=codebuddy
+```
+
 ### 群聊模式
 
 ```env
@@ -120,12 +151,12 @@ ALLOWED_SENDER_IDS=ou_xxx,ou_yyy
 src/
   index.ts                   # 主入口
   feishu-mcp-client.ts       # 飞书 MCP 客户端
-  router.ts                  # 意图分类（Claude Haiku）
+  router.ts                  # 意图分类（Claude/CodeBuddy）
   session-store.ts           # 本地会话存储
   handlers/
-    product-qa.ts            # 产品问答
-    bug-fixer.ts             # Bug 修复
-    general-qa.ts            # 普通问答
+    product-qa.ts            # 产品问答（Claude/CodeBuddy）
+    bug-fixer.ts             # Bug 修复（CodeBuddy）
+    general-qa.ts            # 普通问答（Claude/CodeBuddy）
   knowledge/
     loader.ts                # 知识库加载
     retriever.ts             # 关键词检索
