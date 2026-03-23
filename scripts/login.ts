@@ -1,0 +1,30 @@
+/**
+ * 一次性登录脚本，运行后在浏览器完成授权即可
+ * 运行: npx tsx scripts/login.ts
+ */
+import 'dotenv/config';
+import { unstable_v2_authenticate } from '@tencent-ai/agent-sdk';
+
+async function main() {
+  console.log('正在启动 CodeBuddy 登录流程...\n');
+
+  try {
+    const result = await unstable_v2_authenticate({
+      onAuthUrl: async (authState) => {
+        console.log('authState:', JSON.stringify(authState, null, 2));
+        const url = (authState as any).url ?? (authState as any).authUrl ?? (authState as any).loginUrl ?? (authState as any).uri;
+        console.log('请在浏览器中打开以下链接完成授权：');
+        console.log('\n' + url + '\n');
+      },
+    });
+
+    console.log('✅ 登录成功！');
+    console.log(`   用户: ${result.userinfo.userName || result.userinfo.userId}`);
+    console.log('\ntoken 已保存，现在可以运行 npm run dev 启动机器人。');
+  } catch (error) {
+    console.error('❌ 登录失败:', error);
+    process.exit(1);
+  }
+}
+
+main();

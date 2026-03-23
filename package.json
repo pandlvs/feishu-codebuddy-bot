@@ -1,0 +1,26 @@
+{
+  "name": "feishu-codebuddy-bot",
+  "version": "1.0.0",
+  "description": "飞书机器人接入CodeBuddy SDK，让CodeBuddy帮你在飞书里写代码",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.80.0",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@tencent-ai/agent-sdk": "^0.3.89",
+    "axios": "^1.6.0",
+    "dotenv": "^17.3.1",
+    "express": "^4.18.2",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.11.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}
