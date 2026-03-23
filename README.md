@@ -5,9 +5,11 @@
 ## 功能特性
 
 - **意图路由**：自动识别用户意图，路由到对应处理器
+  - 支持两种路由引擎：Claude API 或 CodeBuddy SDK
   - `ngs-product-qa`：电销系统产品问答（RAG + Claude）
   - `ngs-bug-fixer`：测试问题修复（CodeBuddy）
   - `general-qa`：普通问答（Claude）
+  - Router 失败时自动降级到 general-qa
 
 - **两种群聊模式**
   - `individual`：@机器人触发，每人独立会话
@@ -33,7 +35,10 @@ npm install
 # 飞书 MCP 服务器 URL（必填）
 FEISHU_MCP_URL=https://open.feishu.cn/mcp/stream/your_token_here
 
-# Claude API（必填）
+# Router 引擎：claude 或 codebuddy（默认 claude）
+ROUTER_ENGINE=claude
+
+# Claude API（ROUTER_ENGINE=claude 时必填）
 CLAUDE_API_KEY=sk-ant-xxx
 CLAUDE_BASE_URL=https://api.anthropic.com
 

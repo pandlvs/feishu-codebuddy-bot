@@ -108,19 +108,27 @@ async function dispatch(
     return;
   }
 
-  // Router 分类
+  // Router 分类（内网环境可能失败，使用默认意图）
   console.log(`[${chatId}] 路由分类中... (user=${userId})`);
   let intent: Intent;
-  try {
-    const routeResult = await route(content, session.history);
-    intent = routeResult.intent;
-    console.log(`[${chatId}] 路由结果: ${intent} (confidence=${routeResult.confidence}, reason=${routeResult.reason})`);
-  } catch (error) {
-    console.error(`[${chatId}] Router 调用失败:`, error);
-    await trackSend(chatId,
-      `[来自AI] ❌ 意图识别失败: ${error instanceof Error ? error.message : String(error)}`
-    );
-    return;
+
+  // 检查是否配置了默认意图（内网环境）
+  const defaultIntent = process.env[`CHAT_DEFAULT_INTENT_${chatId}`] as Intent | undefined;
+
+  if (defaultIntent) {
+    intent = defaultIntent;
+    console.log(`[${chatId}] 使用配置的默认意图: ${intent}`);
+  } else {
+    try {
+      const routeResult = await route(content, session.history);
+      intent = routeResult.intent;
+      console.log(`[${chatId}] 路由结果: ${intent} (confidence=${routeResult.confidence}, reason=${routeResult.reason})`);
+    } catch (error) {
+      console.error(`[${chatId}] Router 调用失败:`, error);
+      // Router 失败时使用 general-qa 作为 fallback
+      intent = 'general-qa';
+      console.log(`[${chatId}] Router 失败，使用 fallback 意图: ${intent}`);
+    }
   }
 
   // 检查群能力范围

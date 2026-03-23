@@ -17,6 +17,10 @@ let client: Client | null = null;
 async function getClient(): Promise<Client> {
   if (client) return client;
 
+  if (!FEISHU_MCP_URL) {
+    throw new Error('FEISHU_MCP_URL 未配置');
+  }
+
   const transport = new StreamableHTTPClientTransport(new URL(FEISHU_MCP_URL));
   client = new Client({ name: 'feishu-codebuddy-bot', version: '1.0.0' });
   await client.connect(transport);
