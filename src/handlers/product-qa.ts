@@ -12,6 +12,10 @@ import { Session, appendHistory } from '../session-store';
 const PRODUCT_QA_ENGINE = process.env.PRODUCT_QA_ENGINE || process.env.QA_ENGINE || 'claude';
 const WORKING_DIR = process.env.WORKING_DIR || process.cwd();
 
+// CodeBuddy 服务地址配置
+const CODEBUDDY_ENVIRONMENT = process.env.CODEBUDDY_ENVIRONMENT as 'external' | 'internal' | 'ioa' | 'cloudhosted' | undefined;
+const CODEBUDDY_ENDPOINT = process.env.CODEBUDDY_ENDPOINT;
+
 const SYSTEM_PROMPT = `你是电销系统（NGS）的产品专家助手。
 根据提供的知识库文档回答用户问题，回答要准确、简洁。
 如果知识库中没有相关信息，如实告知用户，不要编造内容。`;
@@ -80,15 +84,22 @@ async function handleWithCodeBuddy(
 
   fullPrompt += `用户问题：${userMessage}`;
 
+  // 构建 session 配置
+  const sessionConfig: any = {
+    cwd: WORKING_DIR,
+    systemPrompt: SYSTEM_PROMPT,
+  };
+
+  // 添加服务地址配置
+  if (CODEBUDDY_ENVIRONMENT) {
+    sessionConfig.environment = CODEBUDDY_ENVIRONMENT;
+  } else if (CODEBUDDY_ENDPOINT) {
+    sessionConfig.endpoint = CODEBUDDY_ENDPOINT;
+  }
+
   const codeBuddySession = session.sessionId
-    ? unstable_v2_resumeSession(session.sessionId, {
-        cwd: WORKING_DIR,
-        systemPrompt: SYSTEM_PROMPT,
-      })
-    : unstable_v2_createSession({
-        cwd: WORKING_DIR,
-        systemPrompt: SYSTEM_PROMPT,
-      });
+    ? unstable_v2_resumeSession(session.sessionId, sessionConfig)
+    : unstable_v2_createSession(sessionConfig);
 
   await codeBuddySession.send(fullPrompt);
 

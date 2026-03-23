@@ -9,6 +9,10 @@ import { HistoryMessage, Intent } from './session-store';
 
 const ROUTER_ENGINE = process.env.ROUTER_ENGINE || 'claude';
 
+// CodeBuddy 服务地址配置
+const CODEBUDDY_ENVIRONMENT = process.env.CODEBUDDY_ENVIRONMENT as 'external' | 'internal' | 'ioa' | 'cloudhosted' | undefined;
+const CODEBUDDY_ENDPOINT = process.env.CODEBUDDY_ENDPOINT;
+
 export interface RouteResult {
   intent: Intent;
   confidence: number;
@@ -85,10 +89,20 @@ async function routeWithCodeBuddy(
 
   contextPrompt += `当前消息：${userMessage}\n\n请分析意图并返回 JSON。`;
 
-  const result = await unstable_v2_prompt(contextPrompt, {
+  // 构建 prompt 配置
+  const promptConfig: any = {
     cwd: process.cwd(),
     maxTurns: 1,
-  });
+  };
+
+  // 添加服务地址配置
+  if (CODEBUDDY_ENVIRONMENT) {
+    promptConfig.environment = CODEBUDDY_ENVIRONMENT;
+  } else if (CODEBUDDY_ENDPOINT) {
+    promptConfig.endpoint = CODEBUDDY_ENDPOINT;
+  }
+
+  const result = await unstable_v2_prompt(contextPrompt, promptConfig);
 
   // 从 CodeBuddy 返回的结果中提取文本
   let text = '';

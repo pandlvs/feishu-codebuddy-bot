@@ -10,6 +10,10 @@ const WORKING_DIR = process.env.WORKING_DIR || process.cwd();
 const DEFAULT_PERMISSION_MODE = process.env.DEFAULT_PERMISSION_MODE || 'acceptEdits';
 const DEFAULT_MAX_TURNS = Number(process.env.DEFAULT_MAX_TURNS || 10);
 
+// CodeBuddy 服务地址配置
+const CODEBUDDY_ENVIRONMENT = process.env.CODEBUDDY_ENVIRONMENT as 'external' | 'internal' | 'ioa' | 'cloudhosted' | undefined;
+const CODEBUDDY_ENDPOINT = process.env.CODEBUDDY_ENDPOINT;
+
 const SYSTEM_PROMPT = `你是电销系统（NGS）的测试问题修复助手。
 用户会提供报错日志或问题描述，你需要：
 1. 从 workspace 中找到相关代码进行分析
@@ -22,19 +26,24 @@ export async function handleBugFixer(
   userMessage: string,
   session: Session
 ): Promise<{ reply: string; newState: 'idle' | 'pending_confirmation'; sessionId?: string }> {
+  // 构建 session 配置
+  const sessionConfig: any = {
+    cwd: WORKING_DIR,
+    permissionMode: DEFAULT_PERMISSION_MODE as any,
+    maxTurns: DEFAULT_MAX_TURNS,
+    systemPrompt: SYSTEM_PROMPT,
+  };
+
+  // 添加服务地址配置
+  if (CODEBUDDY_ENVIRONMENT) {
+    sessionConfig.environment = CODEBUDDY_ENVIRONMENT;
+  } else if (CODEBUDDY_ENDPOINT) {
+    sessionConfig.endpoint = CODEBUDDY_ENDPOINT;
+  }
+
   const codeBuddySession = session.sessionId
-    ? unstable_v2_resumeSession(session.sessionId, {
-        cwd: WORKING_DIR,
-        permissionMode: DEFAULT_PERMISSION_MODE as any,
-        maxTurns: DEFAULT_MAX_TURNS,
-        systemPrompt: SYSTEM_PROMPT,
-      })
-    : unstable_v2_createSession({
-        cwd: WORKING_DIR,
-        permissionMode: DEFAULT_PERMISSION_MODE as any,
-        maxTurns: DEFAULT_MAX_TURNS,
-        systemPrompt: SYSTEM_PROMPT,
-      });
+    ? unstable_v2_resumeSession(session.sessionId, sessionConfig)
+    : unstable_v2_createSession(sessionConfig);
 
   await codeBuddySession.send(userMessage);
 

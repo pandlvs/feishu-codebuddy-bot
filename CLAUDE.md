@@ -55,6 +55,8 @@ Copy `.env.example` to `.env` before running. Key variables:
 | `SESSIONS_DIR` | Directory for session storage (default: ./sessions) |
 | `WORKING_DIR` | CodeBuddy working directory (default: process.cwd()) |
 | `DEFAULT_CHAT_MODE` | individual or shared (default: individual) |
+| `CODEBUDDY_ENVIRONMENT` | CodeBuddy environment: external, internal, ioa, cloudhosted (optional) |
+| `CODEBUDDY_ENDPOINT` | Custom CodeBuddy endpoint URL (optional, mutually exclusive with environment) |
 
 ## Chat Modes
 
@@ -96,6 +98,24 @@ GENERAL_QA_ENGINE=claude
 # Use CodeBuddy for both
 QA_ENGINE=codebuddy
 ```
+
+### CodeBuddy Server Configuration
+
+When using CodeBuddy engine, you can configure the server address:
+
+**Option 1: Predefined environment** (recommended for standard deployments)
+```bash
+CODEBUDDY_ENVIRONMENT=external  # or internal, ioa, cloudhosted
+```
+
+**Option 2: Custom endpoint** (for self-hosted or custom servers)
+```bash
+CODEBUDDY_ENDPOINT=https://your-codebuddy-server.com
+```
+
+Note: `CODEBUDDY_ENVIRONMENT` and `CODEBUDDY_ENDPOINT` are mutually exclusive. If both are set, `CODEBUDDY_ENVIRONMENT` takes precedence.
+
+Default behavior: If neither is set, CodeBuddy SDK uses its default endpoint (https://www.codebuddy.ai).
 
 ## Key Dependencies
 

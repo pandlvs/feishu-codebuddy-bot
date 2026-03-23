@@ -70,7 +70,19 @@ knowledge/
   FAQ.md
 ```
 
-### 4. CodeBuddy 登录
+### 4. CodeBuddy 登录（使用 CodeBuddy 引擎时需要）
+
+如果使用自定义服务器，先在 `.env` 中配置：
+
+```env
+# 方式 1：使用预定义环境
+CODEBUDDY_ENVIRONMENT=external
+
+# 方式 2：使用自定义 endpoint
+# CODEBUDDY_ENDPOINT=https://your-codebuddy-server.com
+```
+
+然后运行登录脚本：
 
 ```bash
 npx tsx scripts/login.ts
@@ -116,6 +128,25 @@ GENERAL_QA_ENGINE=claude
 # 方案 3：全部使用 CodeBuddy
 QA_ENGINE=codebuddy
 ```
+
+### CodeBuddy 服务器配置
+
+使用 CodeBuddy 引擎时，可以配置服务器地址：
+
+**方式 1：预定义环境**（推荐用于标准部署）
+```env
+CODEBUDDY_ENVIRONMENT=external  # 可选: external, internal, ioa, cloudhosted
+```
+
+**方式 2：自定义 endpoint**（用于自建或定制服务器）
+```env
+CODEBUDDY_ENDPOINT=https://your-codebuddy-server.com
+```
+
+注意：
+- `CODEBUDDY_ENVIRONMENT` 和 `CODEBUDDY_ENDPOINT` 互斥，同时配置时优先使用 `CODEBUDDY_ENVIRONMENT`
+- 都不配置时，使用 CodeBuddy SDK 默认地址（https://www.codebuddy.ai）
+- 如果遇到连接错误（如 502 ECONNRESET），需要配置正确的服务器地址
 
 ### 群聊模式
 

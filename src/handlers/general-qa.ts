@@ -11,6 +11,10 @@ import { Session, appendHistory } from '../session-store';
 const GENERAL_QA_ENGINE = process.env.GENERAL_QA_ENGINE || process.env.QA_ENGINE || 'claude';
 const WORKING_DIR = process.env.WORKING_DIR || process.cwd();
 
+// CodeBuddy 服务地址配置
+const CODEBUDDY_ENVIRONMENT = process.env.CODEBUDDY_ENVIRONMENT as 'external' | 'internal' | 'ioa' | 'cloudhosted' | undefined;
+const CODEBUDDY_ENDPOINT = process.env.CODEBUDDY_ENDPOINT;
+
 const SYSTEM_PROMPT = `你是一个友好的 AI 助手，回答用户的各类问题。回答简洁、准确。`;
 
 // ─── Claude 引擎 ──────────────────────────────────────────────────────────────
@@ -65,15 +69,22 @@ async function handleWithCodeBuddy(
 
   fullPrompt += `用户问题：${userMessage}`;
 
+  // 构建 session 配置
+  const sessionConfig: any = {
+    cwd: WORKING_DIR,
+    systemPrompt: SYSTEM_PROMPT,
+  };
+
+  // 添加服务地址配置
+  if (CODEBUDDY_ENVIRONMENT) {
+    sessionConfig.environment = CODEBUDDY_ENVIRONMENT;
+  } else if (CODEBUDDY_ENDPOINT) {
+    sessionConfig.endpoint = CODEBUDDY_ENDPOINT;
+  }
+
   const codeBuddySession = session.sessionId
-    ? unstable_v2_resumeSession(session.sessionId, {
-        cwd: WORKING_DIR,
-        systemPrompt: SYSTEM_PROMPT,
-      })
-    : unstable_v2_createSession({
-        cwd: WORKING_DIR,
-        systemPrompt: SYSTEM_PROMPT,
-      });
+    ? unstable_v2_resumeSession(session.sessionId, sessionConfig)
+    : unstable_v2_createSession(sessionConfig);
 
   await codeBuddySession.send(fullPrompt);
 
