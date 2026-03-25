@@ -8,8 +8,9 @@ import Anthropic from '@anthropic-ai/sdk';
 import { unstable_v2_createSession, unstable_v2_resumeSession } from '@tencent-ai/agent-sdk';
 import { search } from '../knowledge/retriever';
 import { Session, appendHistory } from '../session-store';
+import { runCli } from '../cli-runner';
 
-const PRODUCT_QA_ENGINE = process.env.PRODUCT_QA_ENGINE || process.env.QA_ENGINE || 'claude';
+const PRODUCT_QA_ENGINE = process.env.PRODUCT_QA_ENGINE || process.env.QA_ENGINE || 'cli-claude';
 const WORKING_DIR = process.env.WORKING_DIR || process.cwd();
 
 // CodeBuddy 服务地址配置
@@ -118,6 +119,45 @@ async function handleWithCodeBuddy(
   return result.trim();
 }
 
+// ─── CLI 引擎 ─────────────────────────────────────────────────────────────────
+
+const CLI_QA_MODEL = process.env.CLAUDE_CLI_MODEL;
+
+async function handleWithCli(
+  userMessage: string,
+  session: Session,
+  knowledgeContext: string,
+  tool: 'claude' | 'codebuddy'
+): Promise<string> {
+  let prompt = '';
+
+  if (knowledgeContext) {
+    prompt += knowledgeContext + '\n\n';
+  }
+
+  if (session.history.length > 0) {
+    prompt += '对话历史：\n';
+    for (const h of session.history.slice(-5)) {
+      prompt += `${h.role === 'user' ? '用户' : '助手'}: ${h.content}\n`;
+    }
+    prompt += '\n';
+  }
+
+  prompt += `用户问题：${userMessage}`;
+
+  const { text, sessionId } = await runCli({
+    tool,
+    prompt,
+    sessionId: session.sessionId,
+    systemPrompt: SYSTEM_PROMPT,
+    model: tool === 'claude' ? CLI_QA_MODEL : undefined,
+  });
+
+  if (sessionId) session.sessionId = sessionId;
+
+  return text;
+}
+
 // ─── 统一入口 ─────────────────────────────────────────────────────────────────
 
 export async function handleProductQA(
@@ -135,11 +175,17 @@ export async function handleProductQA(
 
   let answer: string;
 
-  if (PRODUCT_QA_ENGINE === 'codebuddy') {
-    console.log('[ProductQA] 使用 CodeBuddy 引擎');
+  if (PRODUCT_QA_ENGINE === 'cli-claude') {
+    console.log('[ProductQA] 使用 CLI Claude 引擎');
+    answer = await handleWithCli(userMessage, session, knowledgeContext, 'claude');
+  } else if (PRODUCT_QA_ENGINE === 'cli-codebuddy') {
+    console.log('[ProductQA] 使用 CLI CodeBuddy 引擎');
+    answer = await handleWithCli(userMessage, session, knowledgeContext, 'codebuddy');
+  } else if (PRODUCT_QA_ENGINE === 'codebuddy') {
+    console.log('[ProductQA] 使用 CodeBuddy SDK 引擎');
     answer = await handleWithCodeBuddy(userMessage, session, knowledgeContext);
   } else {
-    console.log('[ProductQA] 使用 Claude 引擎');
+    console.log('[ProductQA] 使用 Claude SDK 引擎');
     answer = await handleWithClaude(userMessage, session, knowledgeContext);
   }
 

@@ -6,8 +6,9 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { unstable_v2_prompt } from '@tencent-ai/agent-sdk';
 import { HistoryMessage, Intent } from './session-store';
+import { runCli } from './cli-runner';
 
-const ROUTER_ENGINE = process.env.ROUTER_ENGINE || 'claude';
+const ROUTER_ENGINE = process.env.ROUTER_ENGINE || 'cli-claude';
 
 // CodeBuddy 服务地址配置
 const CODEBUDDY_ENVIRONMENT = process.env.CODEBUDDY_ENVIRONMENT as 'external' | 'internal' | 'ioa' | 'cloudhosted' | undefined;
@@ -121,17 +122,58 @@ async function routeWithCodeBuddy(
   };
 }
 
+// ─── CLI 引擎 ─────────────────────────────────────────────────────────────────
+
+async function routeWithCli(
+  userMessage: string,
+  history: HistoryMessage[],
+  tool: 'claude' | 'codebuddy'
+): Promise<RouteResult> {
+  let prompt = '';
+
+  if (history.length > 0) {
+    prompt += '对话历史（最近5条）：\n';
+    for (const h of history.slice(-5)) {
+      prompt += `${h.role === 'user' ? '用户' : '助手'}: ${h.content}\n`;
+    }
+    prompt += '\n';
+  }
+
+  prompt += `当前消息：${userMessage}\n\n请分析意图并返回 JSON。`;
+
+  const { text } = await runCli({
+    tool,
+    prompt,
+    systemPrompt: SYSTEM_PROMPT,
+    maxTurns: 1,
+  });
+
+  const json = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] ?? text);
+
+  return {
+    intent: json.intent as Intent,
+    confidence: json.confidence ?? 1,
+    reason: json.reason ?? '',
+  };
+}
+
 // ─── 统一入口 ─────────────────────────────────────────────────────────────────
 
 export async function route(
   userMessage: string,
   history: HistoryMessage[]
 ): Promise<RouteResult> {
-  if (ROUTER_ENGINE === 'codebuddy') {
-    console.log('[Router] 使用 CodeBuddy 引擎');
+  if (ROUTER_ENGINE === 'cli-claude') {
+    console.log('[Router] 使用 CLI Claude 引擎');
+    return routeWithCli(userMessage, history, 'claude');
+  } else if (ROUTER_ENGINE === 'cli-codebuddy') {
+    console.log('[Router] 使用 CLI CodeBuddy 引擎');
+    return routeWithCli(userMessage, history, 'codebuddy');
+  } else if (ROUTER_ENGINE === 'codebuddy') {
+    console.log('[Router] 使用 CodeBuddy SDK 引擎');
     return routeWithCodeBuddy(userMessage, history);
   } else {
-    console.log('[Router] 使用 Claude 引擎');
+    console.log('[Router] 使用 Claude SDK 引擎');
     return routeWithClaude(userMessage, history);
   }
 }
