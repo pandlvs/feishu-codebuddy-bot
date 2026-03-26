@@ -1,46 +1,43 @@
 /**
- * 飞书 CodeBuddy 机器人 - 轮询模式
+ * 飞书 Claude CLI 机器人 - 轮询模式
  * 支持意图路由：ngs-product-qa / ngs-bug-fixer / general-qa
  * 支持两种群聊模式：individual（@触发，每人独立会话）/ shared（所有消息）
  */
 
-import 'dotenv/config';
 import { getMessagesFromChat, sendMessage, FeishuMessage } from './feishu-mcp-client';
 import { route } from './router';
 import { loadSession, saveSession, resetSession, appendHistory, Intent } from './session-store';
 import { handleProductQA } from './handlers/product-qa';
 import { handleBugFixer } from './handlers/bug-fixer';
 import { handleGeneralQA } from './handlers/general-qa';
+import { config } from './config';
 
 // ─── 配置 ────────────────────────────────────────────────────────────────────
 
-const POLL_INTERVAL = Number(process.env.POLL_INTERVAL || 5000);
-const WATCH_CHAT_IDS: string[] = (process.env.WATCH_CHAT_IDS || '')
-  .split(',').map(s => s.trim()).filter(Boolean);
-const ALLOWED_SENDER_IDS: string[] = (process.env.ALLOWED_SENDER_IDS || '')
-  .split(',').map(s => s.trim()).filter(Boolean);
-const BOT_OPEN_ID = process.env.BOT_OPEN_ID || '';
-const DEFAULT_CHAT_MODE = (process.env.DEFAULT_CHAT_MODE || 'individual') as 'individual' | 'shared';
-const OUT_OF_SCOPE_REPLY = process.env.OUT_OF_SCOPE_REPLY ||
-  '抱歉，暂时还不支持，可以尝试把问题创建成飞书任务。';
+const POLL_INTERVAL = config.pollInterval ?? 5000;
+const WATCH_CHAT_IDS = config.watchChatIds;
+const ALLOWED_SENDER_IDS = config.allowedSenderIds ?? [];
+const BOT_OPEN_ID = config.botOpenId ?? '';
+const DEFAULT_CHAT_MODE = config.defaultChatMode ?? 'individual';
+const OUT_OF_SCOPE_REPLY = config.outOfScopeReply ?? '抱歉，暂时还不支持，可以尝试把问题创建成飞书任务。';
 
 if (WATCH_CHAT_IDS.length === 0) {
-  console.error('❌ 未配置 WATCH_CHAT_IDS');
+  console.error('❌ 未配置 watchChatIds');
   process.exit(1);
 }
 
 function getChatMode(chatId: string): 'individual' | 'shared' {
-  const val = process.env[`CHAT_MODE_${chatId}`];
-  if (val === 'shared' || val === 'individual') return val;
-  return DEFAULT_CHAT_MODE;
+  return config.chats?.[chatId]?.mode ?? DEFAULT_CHAT_MODE;
 }
 
-// 群能力配置：CHAT_CAPABILITIES_oc_xxx=ngs-product-qa,ngs-bug-fixer
-// 不配置则支持所有意图
 function getChatCapabilities(chatId: string): Intent[] | null {
-  const val = process.env[`CHAT_CAPABILITIES_${chatId}`];
-  if (!val) return null;
-  return val.split(',').map(s => s.trim()) as Intent[];
+  const caps = config.chats?.[chatId]?.capabilities;
+  if (!caps || caps.length === 0) return null;
+  return caps as Intent[];
+}
+
+function getChatDefaultIntent(chatId: string): Intent | undefined {
+  return config.chats?.[chatId]?.defaultIntent as Intent | undefined;
 }
 
 // ─── 运行时状态 ───────────────────────────────────────────────────────────────
@@ -108,13 +105,11 @@ async function dispatch(
     return;
   }
 
-  // Router 分类（内网环境可能失败，使用默认意图）
+  // Router 分类
   console.log(`[${chatId}] 路由分类中... (user=${userId})`);
   let intent: Intent;
 
-  // 检查是否配置了默认意图（内网环境）
-  const defaultIntent = process.env[`CHAT_DEFAULT_INTENT_${chatId}`] as Intent | undefined;
-
+  const defaultIntent = getChatDefaultIntent(chatId);
   if (defaultIntent) {
     intent = defaultIntent;
     console.log(`[${chatId}] 使用配置的默认意图: ${intent}`);
@@ -125,7 +120,6 @@ async function dispatch(
       console.log(`[${chatId}] 路由结果: ${intent} (confidence=${routeResult.confidence}, reason=${routeResult.reason})`);
     } catch (error) {
       console.error(`[${chatId}] Router 调用失败:`, error);
-      // Router 失败时使用 general-qa 作为 fallback
       intent = 'general-qa';
       console.log(`[${chatId}] Router 失败，使用 fallback 意图: ${intent}`);
     }
@@ -160,7 +154,6 @@ async function dispatch(
       saveSession(chatId, userId, session);
 
     } else {
-      // general-qa
       reply = await handleGeneralQA(content, session);
       session.currentIntent = intent;
       session.state = 'idle';
@@ -200,9 +193,7 @@ async function processIndividual(message: FeishuMessage): Promise<void> {
 async function processShared(message: FeishuMessage): Promise<void> {
   const rawContent = message.content.replace(/@\S+/g, '').trim();
   if (!rawContent) return;
-  // 带发送者标识
   const content = `[${message.sender_id}]: ${rawContent}`;
-  // shared 模式用 chatId 作为 userId（共享同一个 session 文件）
   await dispatch(message.chat_id, `__shared__`, content, true);
 }
 
@@ -270,7 +261,7 @@ async function startWithRestart() {
   }
 }
 
-console.log('🚀 飞书CodeBuddy机器人启动');
+console.log('🚀 飞书Claude机器人启动');
 console.log(`   轮询间隔: ${POLL_INTERVAL}ms`);
 console.log(`   默认模式: ${DEFAULT_CHAT_MODE}`);
 console.log(`   监听群组: ${WATCH_CHAT_IDS.map(id => `${id}(${getChatMode(id)})`).join(', ')}`);

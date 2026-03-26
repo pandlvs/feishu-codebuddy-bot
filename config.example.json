@@ -1,0 +1,58 @@
+{
+  "feishuMcpUrl": "https://open.feishu.cn/mcp/stream/your_token_here",
+  "watchChatIds": ["oc_xxxxxxxx", "oc_yyyyyyyy"],
+  "botOpenId": "ou_xxxxxxxx",
+  "allowedSenderIds": [],
+  "pollInterval": 5000,
+  "defaultChatMode": "individual",
+  "outOfScopeReply": "抱歉，暂时还不支持，可以尝试把问题创建成飞书任务。",
+
+  "claudeCliPath": "claude",
+  "claudeCliModel": "claude-sonnet-4-6",
+  "cliTimeoutMs": 120000,
+
+  "workingDir": "/path/to/your/code",
+  "allowedTools": "",
+  "disallowedTools": "",
+  "defaultPermissionMode": "acceptEdits",
+  "defaultMaxTurns": 10,
+
+  "knowledgeDir": "./knowledge",
+  "sessionsDir": "./sessions",
+
+  "chats": {
+    "oc_xxxxxxxx": {
+      "mode": "individual",
+      "capabilities": ["ngs-product-qa", "ngs-bug-fixer", "general-qa"],
+      "defaultIntent": ""
+    },
+    "oc_yyyyyyyy": {
+      "mode": "shared",
+      "capabilities": ["general-qa"],
+      "defaultIntent": "general-qa"
+    }
+  },
+
+  "handlers": {
+    "router": {
+      "workingDir": ""
+    },
+    "productQa": {
+      "workingDir": "",
+      "allowedTools": "",
+      "disallowedTools": ""
+    },
+    "generalQa": {
+      "workingDir": "",
+      "allowedTools": "",
+      "disallowedTools": ""
+    },
+    "bugFixer": {
+      "workingDir": "",
+      "allowedTools": "",
+      "disallowedTools": "",
+      "maxTurns": 10,
+      "permissionMode": "acceptEdits"
+    }
+  }
+}

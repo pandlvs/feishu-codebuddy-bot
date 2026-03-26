@@ -5,23 +5,18 @@
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-
-const FEISHU_MCP_URL = process.env.FEISHU_MCP_URL;
-
-if (!FEISHU_MCP_URL) {
-  throw new Error('FEISHU_MCP_URL 未配置，请在 .env 中设置');
-}
+import { config } from './config';
 
 let client: Client | null = null;
 
 async function getClient(): Promise<Client> {
   if (client) return client;
 
-  if (!FEISHU_MCP_URL) {
-    throw new Error('FEISHU_MCP_URL 未配置');
+  if (!config.feishuMcpUrl) {
+    throw new Error('feishuMcpUrl 未配置，请在 config.json 中设置');
   }
 
-  const transport = new StreamableHTTPClientTransport(new URL(FEISHU_MCP_URL));
+  const transport = new StreamableHTTPClientTransport(new URL(config.feishuMcpUrl));
   client = new Client({ name: 'feishu-codebuddy-bot', version: '1.0.0' });
   await client.connect(transport);
   console.log('[FeishuMCP] 已连接到飞书远程MCP服务器');

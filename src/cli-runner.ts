@@ -1,23 +1,20 @@
 /**
  * CLI Runner
- * 通过子进程调用 claude 或 codebuddy CLI，prompt 通过 stdin 传入
+ * 通过子进程调用 claude CLI，prompt 通过 stdin 传入
  */
 
 import { spawn } from 'child_process';
-
-const CLAUDE_CLI_PATH = process.env.CLAUDE_CLI_PATH || 'claude';
-const CODEBUDDY_CLI_PATH = process.env.CODEBUDDY_CLI_PATH || 'codebuddy';
-const CLI_TIMEOUT_MS = Number(process.env.CLI_TIMEOUT_MS || 120000);
+import { config } from './config';
 
 export interface CliRunOptions {
-  tool: 'claude' | 'codebuddy';
   prompt: string;
   sessionId?: string;
   systemPrompt?: string;
   cwd?: string;
   maxTurns?: number;
   permissionMode?: string;
-  model?: string;
+  allowedTools?: string;
+  disallowedTools?: string;
 }
 
 export interface CliRunResult {
@@ -26,34 +23,30 @@ export interface CliRunResult {
 }
 
 export async function runCli(options: CliRunOptions): Promise<CliRunResult> {
-  const { tool, prompt, sessionId, systemPrompt, cwd, maxTurns, permissionMode, model } = options;
+  const { prompt, sessionId, systemPrompt, cwd, maxTurns, permissionMode, allowedTools, disallowedTools } = options;
 
-  const cliPath = tool === 'claude' ? CLAUDE_CLI_PATH : CODEBUDDY_CLI_PATH;
+  const cliPath = config.claudeCliPath || 'claude';
+  const timeoutMs = config.cliTimeoutMs ?? 120000;
+  const model = config.claudeCliModel;
 
   const args: string[] = ['-p', '--output-format', 'json'];
 
-  if (sessionId) {
-    args.push('--resume', sessionId);
-  }
-  if (systemPrompt) {
-    args.push('--system-prompt', systemPrompt);
-  }
-  if (maxTurns !== undefined) {
-    args.push('--max-turns', String(maxTurns));
-  }
-  if (permissionMode) {
-    args.push('--permission-mode', permissionMode);
-  }
-  if (model) {
-    args.push('--model', model);
-  }
+  if (sessionId) args.push('--resume', sessionId);
+  if (systemPrompt) args.push('--system-prompt', systemPrompt);
+  if (maxTurns !== undefined) args.push('--max-turns', String(maxTurns));
+  if (permissionMode) args.push('--permission-mode', permissionMode);
+  if (model) args.push('--model', model);
+  if (allowedTools) args.push('--allowedTools', allowedTools);
+  if (disallowedTools) args.push('--disallowedTools', disallowedTools);
 
   console.log(`[CLI] 启动 ${cliPath} ${args.join(' ')}`);
 
+  const isWindows = process.platform === 'win32';
   const proc = spawn(cliPath, args, {
     cwd: cwd || process.cwd(),
     env: process.env,
     stdio: ['pipe', 'pipe', 'pipe'],
+    shell: isWindows,
   });
 
   proc.stdin.write(prompt, 'utf8');
@@ -62,13 +55,8 @@ export async function runCli(options: CliRunOptions): Promise<CliRunResult> {
   let stdout = '';
   let stderr = '';
 
-  proc.stdout.on('data', (chunk: Buffer) => {
-    stdout += chunk.toString('utf8');
-  });
-
-  proc.stderr.on('data', (chunk: Buffer) => {
-    stderr += chunk.toString('utf8');
-  });
+  proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString('utf8'); });
+  proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8'); });
 
   await new Promise<void>((resolve, reject) => {
     let timedOut = false;
@@ -76,8 +64,8 @@ export async function runCli(options: CliRunOptions): Promise<CliRunResult> {
     const timer = setTimeout(() => {
       timedOut = true;
       proc.kill();
-      reject(new Error(`[CLI] ${cliPath} 超时（${CLI_TIMEOUT_MS}ms）`));
-    }, CLI_TIMEOUT_MS);
+      reject(new Error(`[CLI] ${cliPath} 超时（${timeoutMs}ms）`));
+    }, timeoutMs);
 
     proc.on('close', (code) => {
       clearTimeout(timer);
@@ -96,21 +84,20 @@ export async function runCli(options: CliRunOptions): Promise<CliRunResult> {
     });
   });
 
-  if (stderr) {
-    console.warn(`[CLI] ${cliPath} stderr: ${stderr.slice(0, 300)}`);
-  }
+  if (stderr) console.warn(`[CLI] ${cliPath} stderr: ${stderr.slice(0, 300)}`);
 
-  // 解析 JSON 输出
   let text = '';
   let newSessionId: string | undefined;
 
+  console.log(`[CLI] ${cliPath} 原始输出: ${stdout.slice(0, 500)}`);
+
   try {
-    const json = JSON.parse(stdout.trim());
-    // claude/codebuddy --output-format json 返回 { result, session_id, ... }
+    const parsed = JSON.parse(stdout.trim());
+    const arr = Array.isArray(parsed) ? parsed : [parsed];
+    const json = arr.slice().reverse().find((item: any) => item.type === 'result') ?? arr[arr.length - 1];
     text = json.result ?? json.content ?? '';
     newSessionId = json.session_id;
   } catch {
-    // 解析失败时直接用原始输出
     console.warn('[CLI] JSON 解析失败，使用原始输出');
     text = stdout.trim();
   }

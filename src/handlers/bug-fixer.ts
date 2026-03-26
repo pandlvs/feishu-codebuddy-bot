@@ -1,22 +1,13 @@
 /**
  * ngs-bug-fixer handler
- * 用 CodeBuddy Session 分析报错、给出修复方案，等用户确认后执行
+ * 分析报错、给出修复方案，等用户确认后执行
  */
 
-import { unstable_v2_createSession, unstable_v2_resumeSession } from '@tencent-ai/agent-sdk';
 import { Session, appendHistory } from '../session-store';
 import { runCli } from '../cli-runner';
+import { getHandlerConfig, config, loadPrompt } from '../config';
 
-const WORKING_DIR = process.env.WORKING_DIR || process.cwd();
-const DEFAULT_PERMISSION_MODE = process.env.DEFAULT_PERMISSION_MODE || 'acceptEdits';
-const DEFAULT_MAX_TURNS = Number(process.env.DEFAULT_MAX_TURNS || 10);
-const BUG_FIXER_ENGINE = process.env.BUG_FIXER_ENGINE || 'cli-codebuddy';
-
-// CodeBuddy 服务地址配置
-const CODEBUDDY_ENVIRONMENT = process.env.CODEBUDDY_ENVIRONMENT as 'external' | 'internal' | 'ioa' | 'cloudhosted' | undefined;
-const CODEBUDDY_ENDPOINT = process.env.CODEBUDDY_ENDPOINT;
-
-const SYSTEM_PROMPT = `你是电销系统（NGS）的测试问题修复助手。
+const DEFAULT_SYSTEM_PROMPT = `你是电销系统（NGS）的测试问题修复助手。
 用户会提供报错日志或问题描述，你需要：
 1. 从 workspace 中找到相关代码进行分析
 2. 给出详细的修复方案，包括需要修改哪些文件、如何修改
@@ -24,85 +15,31 @@ const SYSTEM_PROMPT = `你是电销系统（NGS）的测试问题修复助手。
 4. 收到【确认】后才执行实际的代码修改
 5. 收到【取消】则放弃修复`;
 
-async function handleWithCodeBuddySdk(
-  userMessage: string,
-  session: Session
-): Promise<{ reply: string; sessionId?: string }> {
-  const sessionConfig: any = {
-    cwd: WORKING_DIR,
-    permissionMode: DEFAULT_PERMISSION_MODE as any,
-    maxTurns: DEFAULT_MAX_TURNS,
-    systemPrompt: SYSTEM_PROMPT,
-  };
-
-  if (CODEBUDDY_ENVIRONMENT) {
-    sessionConfig.environment = CODEBUDDY_ENVIRONMENT;
-  } else if (CODEBUDDY_ENDPOINT) {
-    sessionConfig.endpoint = CODEBUDDY_ENDPOINT;
-  }
-
-  const codeBuddySession = session.sessionId
-    ? unstable_v2_resumeSession(session.sessionId, sessionConfig)
-    : unstable_v2_createSession(sessionConfig);
-
-  await codeBuddySession.send(userMessage);
-
-  let fullResult = '';
-  for await (const msg of codeBuddySession.stream()) {
-    if (msg.type === 'assistant' && msg.message?.content) {
-      for (const block of msg.message.content) {
-        if ((block as any).type === 'text') fullResult += (block as any).text + '\n';
-      }
-    }
-  }
-
-  const sessionId = codeBuddySession.sessionId;
-  codeBuddySession.close();
-
-  return { reply: fullResult.trim(), sessionId };
-}
-
-async function handleWithCli(
-  userMessage: string,
-  session: Session,
-  tool: 'claude' | 'codebuddy'
-): Promise<{ reply: string; sessionId?: string }> {
-  const { text, sessionId } = await runCli({
-    tool,
-    prompt: userMessage,
-    sessionId: session.sessionId,
-    systemPrompt: SYSTEM_PROMPT,
-    cwd: WORKING_DIR,
-    maxTurns: DEFAULT_MAX_TURNS,
-    permissionMode: DEFAULT_PERMISSION_MODE,
-  });
-
-  return { reply: text, sessionId };
-}
-
 export async function handleBugFixer(
   userMessage: string,
   session: Session
 ): Promise<{ reply: string; newState: 'idle' | 'pending_confirmation'; sessionId?: string }> {
-  let reply: string;
-  let sessionId: string | undefined;
+  const handlerCfg = getHandlerConfig('bugFixer');
+  const maxTurns = handlerCfg.maxTurns ?? config.defaultMaxTurns ?? 10;
+  const permissionMode = handlerCfg.permissionMode ?? config.defaultPermissionMode ?? 'acceptEdits';
 
-  if (BUG_FIXER_ENGINE === 'cli-codebuddy') {
-    console.log('[BugFixer] 使用 CLI CodeBuddy 引擎');
-    ({ reply, sessionId } = await handleWithCli(userMessage, session, 'codebuddy'));
-  } else if (BUG_FIXER_ENGINE === 'cli-claude') {
-    console.log('[BugFixer] 使用 CLI Claude 引擎');
-    ({ reply, sessionId } = await handleWithCli(userMessage, session, 'claude'));
-  } else {
-    console.log('[BugFixer] 使用 CodeBuddy SDK 引擎');
-    ({ reply, sessionId } = await handleWithCodeBuddySdk(userMessage, session));
-  }
+  console.log('[BugFixer] 使用 Claude CLI 引擎');
+  const { text, sessionId } = await runCli({
+    prompt: userMessage,
+    sessionId: session.sessionId,
+    systemPrompt: loadPrompt('bug-fixer', DEFAULT_SYSTEM_PROMPT),
+    cwd: handlerCfg.workingDir,
+    maxTurns,
+    permissionMode,
+    allowedTools: handlerCfg.allowedTools || undefined,
+    disallowedTools: handlerCfg.disallowedTools || undefined,
+  });
 
   appendHistory(session, 'user', userMessage);
-  appendHistory(session, 'assistant', reply);
+  appendHistory(session, 'assistant', text);
 
-  const waitingConfirm = reply.includes('确认执行') || reply.includes('是否确认') || reply.includes('回复【确认】');
+  const waitingConfirm = text.includes('确认执行') || text.includes('是否确认') || text.includes('回复【确认】');
   const newState = waitingConfirm ? 'pending_confirmation' : 'idle';
 
-  return { reply, newState, sessionId };
+  return { reply: text, newState, sessionId };
 }
