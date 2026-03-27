@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A Feishu (飞书) × Claude CLI bot with intent routing, multi-turn conversations, and knowledge base Q&A. Designed for internal network deployment without webhooks.
 
-Data flow: `飞书 ↔ Feishu MCP service ↔ this service ↔ Router ↔ Handlers (Claude CLI)`
+Data flow: `飞书 ↔ Feishu MCP service ↔ this service ↔ Router ↔ Handlers (API or Claude CLI)`
 
 ## Commands
 
@@ -20,18 +20,19 @@ npm start        # Run compiled output
 
 ### Core Components
 
-- `src/index.ts` — Main entry point, polling loop, message routing
+- `src/index.ts` — Main entry point, polling loop, message routing; replies to original message via `replyMessage`
 - `src/config.ts` — Config loader (reads config.json)
-- `src/feishu-mcp-client.ts` — Feishu MCP client using StreamableHTTPClientTransport
-- `src/router.ts` — Intent classification via Claude CLI
+- `src/feishu-mcp-client.ts` — Feishu MCP client; `sendMessage` and `replyMessage`
+- `src/api-client.ts` — Anthropic SDK wrapper with streaming support and custom baseURL
+- `src/router.ts` — Intent classification (API if configured, else CLI)
 - `src/cli-runner.ts` — CLI subprocess runner (spawn claude, stdin/stdout)
 - `src/session-store.ts` — Local session file storage (sessions/{chatId}/{userId}.json)
 
 ### Handlers
 
-- `src/handlers/product-qa.ts` — Product Q&A with RAG (keyword search + Claude CLI)
-- `src/handlers/bug-fixer.ts` — Bug fixing with Claude CLI
-- `src/handlers/general-qa.ts` — General Q&A with Claude CLI
+- `src/handlers/product-qa.ts` — Product Q&A with RAG (API or CLI); returns `{ reply, engine }`
+- `src/handlers/bug-fixer.ts` — Bug fixing with Claude CLI; returns `{ reply, engine, newState, sessionId }`
+- `src/handlers/general-qa.ts` — General Q&A (API or CLI); returns `{ reply, engine }`
 
 ### Knowledge Base
 
@@ -49,7 +50,9 @@ Copy `config.example.json` to `config.json` before running. Key fields:
 | `botOpenId` | Bot's open_id for @mention detection (required for individual mode) |
 | `apiBaseUrl` | Anthropic-compatible API base URL (e.g. CodeBuddy proxy) |
 | `apiKey` | API key for the above endpoint |
+| `apiAuthToken` | Auth token (alternative to apiKey, passed as Bearer token) |
 | `apiModel` | Model to use via API (default: claude-sonnet-4-6) |
+| `apiMaxTokens` | Max tokens for API calls (default: 4096) |
 | `allowedSenderIds` | Global user ID whitelist (empty = all); overridden per-chat |
 | `pollInterval` | Polling interval in ms (default: 5000) |
 | `defaultChatMode` | `individual` or `shared` (default: individual) |
@@ -81,9 +84,9 @@ Configure per-chat in `config.json`:
 ## Intent Routing
 
 Router classifies user messages into:
-- `ngs-product-qa` — Product questions (uses knowledge base + Claude CLI)
+- `ngs-product-qa` — Product questions (uses knowledge base + API or CLI)
 - `ngs-bug-fixer` — Bug reports (uses Claude CLI with file access)
-- `general-qa` — General questions (uses Claude CLI)
+- `general-qa` — General questions (uses API or CLI)
 
 Configure per-chat capabilities and default intent:
 ```json

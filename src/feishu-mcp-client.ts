@@ -104,6 +104,19 @@ export async function sendMessage(chatId: string, content: string): Promise<stri
   return messageId;
 }
 
+export async function replyMessage(messageId: string, content: string): Promise<string | undefined> {
+  const result = await callFeishuMcp<any>('im_v1_message_reply', {
+    path: { message_id: messageId },
+    body: {
+      msg_type: 'text',
+      content: JSON.stringify({ text: content }),
+    },
+  });
+  const replyId = result?.data?.message_id ?? result?.message_id;
+  console.log(`[FeishuMCP] 已回复消息 ${messageId}, reply_id=${replyId}`);
+  return replyId;
+}
+
 function extractText(content: any): string {
   if (typeof content === 'string') {
     try {

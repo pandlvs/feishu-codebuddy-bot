@@ -36,7 +36,9 @@ export interface AppConfig {
   // Anthropic API（用于 router/general-qa/product-qa，替代 CLI 提速）
   apiBaseUrl?: string;
   apiKey?: string;
+  apiAuthToken?: string;
   apiModel?: string;
+  apiMaxTokens?: number;
 
   // Claude CLI
   claudeCliPath?: string;

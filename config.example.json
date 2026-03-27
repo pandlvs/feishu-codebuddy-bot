@@ -9,7 +9,9 @@
 
   "apiBaseUrl": "https://your-codebuddy-proxy/v1",
   "apiKey": "your-api-key",
+  "apiAuthToken": "your-auth-token",
   "apiModel": "claude-sonnet-4-6",
+  "apiMaxTokens": 4096,
 
   "claudeCliPath": "claude",
   "claudeCliModel": "claude-sonnet-4-6",

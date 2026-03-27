@@ -4,7 +4,7 @@
  * 支持两种群聊模式：individual（@触发，每人独立会话）/ shared（所有消息）
  */
 
-import { getMessagesFromChat, sendMessage, FeishuMessage } from './feishu-mcp-client';
+import { getMessagesFromChat, sendMessage, replyMessage, FeishuMessage } from './feishu-mcp-client';
 import { route } from './router';
 import { loadSession, saveSession, resetSession, appendHistory, Intent } from './session-store';
 import { handleProductQA } from './handlers/product-qa';
@@ -49,8 +49,11 @@ const processedMessages = new Set<string>();
 const botSentMessageIds = new Set<string>();
 const chatQueues: Map<string, Promise<void>> = new Map();
 
-async function trackSend(chatId: string, content: string): Promise<string | undefined> {
-  const mid = await sendMessage(chatId, content).catch(e => {
+async function trackSend(chatId: string, content: string, replyToMessageId?: string): Promise<string | undefined> {
+  const send = replyToMessageId
+    ? replyMessage(replyToMessageId, content)
+    : sendMessage(chatId, content);
+  const mid = await send.catch(e => {
     console.error(`[${chatId}] 发送消息失败:`, e);
     return undefined;
   });
@@ -58,8 +61,8 @@ async function trackSend(chatId: string, content: string): Promise<string | unde
   return mid;
 }
 
-function formatReply(result: string, duration: string): string {
-  let text = `[来自AI] ✅ (${duration}s)\n\n${result}`;
+function formatReply(result: string, duration: string, agent: string, engine: string): string {
+  let text = `[来自AI/${agent}/${engine}] ✅ (${duration}s)\n\n${result}`;
   if (text.length > 4000) text = text.slice(0, 3900) + '\n...(内容过长已截断)';
   return text;
 }
@@ -70,36 +73,38 @@ async function dispatch(
   chatId: string,
   userId: string,
   content: string,
-  isShared: boolean
+  isShared: boolean,
+  replyToMessageId?: string
 ): Promise<void> {
   const session = loadSession(chatId, userId);
 
   // /reset 指令
   if (content === '/reset' || content === '重置对话') {
     resetSession(chatId, userId);
-    await trackSend(chatId, '[来自AI] ✅ 对话已重置');
+    await trackSend(chatId, '[来自AI] ✅ 对话已重置', replyToMessageId);
     return;
   }
 
   // pending_confirmation 状态：跳过 Router，直接转发给当前 handler
   if (session.state === 'pending_confirmation' && session.currentIntent === 'ngs-bug-fixer') {
     console.log(`[${chatId}] 待确认状态，直接转发给 bug-fixer`);
-    await trackSend(chatId, '⚙️ 正在处理...');
+    await trackSend(chatId, '⚙️ 正在处理...', replyToMessageId);
     const startTime = Date.now();
     try {
-      const { reply, newState, sessionId } = await handleBugFixer(content, session);
+      const { reply, newState, sessionId, engine } = await handleBugFixer(content, session);
       session.state = newState;
       if (sessionId) session.sessionId = sessionId;
       saveSession(chatId, userId, session);
       const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-      await trackSend(chatId, formatReply(reply, duration));
+      await trackSend(chatId, formatReply(reply, duration, 'bug-fixer', engine), replyToMessageId);
     } catch (error) {
       console.error(`[${chatId}] bug-fixer 处理失败:`, error);
       session.state = 'idle';
       session.sessionId = undefined;
       saveSession(chatId, userId, session);
       await trackSend(chatId,
-        `[来自AI] ❌ 处理失败: ${error instanceof Error ? error.message : String(error)}\n\n会话已重置。`
+        `[来自AI] ❌ 处理失败: ${error instanceof Error ? error.message : String(error)}\n\n会话已重置。`,
+        replyToMessageId
       );
     }
     return;
@@ -129,18 +134,21 @@ async function dispatch(
   const capabilities = getChatCapabilities(chatId);
   if (capabilities && !capabilities.includes(intent)) {
     console.log(`[${chatId}] 意图 ${intent} 超出群能力范围 ${capabilities.join(',')}`);
-    await trackSend(chatId, `[来自AI] ${OUT_OF_SCOPE_REPLY}`);
+    await trackSend(chatId, `[来自AI] ${OUT_OF_SCOPE_REPLY}`, replyToMessageId);
     return;
   }
 
-  await trackSend(chatId, '⚙️ 正在处理，请稍候...');
+  await trackSend(chatId, '⚙️ 正在处理，请稍候...', replyToMessageId);
   const startTime = Date.now();
 
   try {
     let reply = '';
+    let engine = '';
 
     if (intent === 'ngs-product-qa') {
-      reply = await handleProductQA(content, session);
+      const result = await handleProductQA(content, session);
+      reply = result.reply;
+      engine = result.engine;
       session.currentIntent = intent;
       session.state = 'idle';
       saveSession(chatId, userId, session);
@@ -148,20 +156,23 @@ async function dispatch(
     } else if (intent === 'ngs-bug-fixer') {
       const result = await handleBugFixer(content, session);
       reply = result.reply;
+      engine = result.engine;
       session.currentIntent = intent;
       session.state = result.newState;
       if (result.sessionId) session.sessionId = result.sessionId;
       saveSession(chatId, userId, session);
 
     } else {
-      reply = await handleGeneralQA(content, session);
+      const result = await handleGeneralQA(content, session);
+      reply = result.reply;
+      engine = result.engine;
       session.currentIntent = intent;
       session.state = 'idle';
       saveSession(chatId, userId, session);
     }
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-    await trackSend(chatId, formatReply(reply, duration));
+    await trackSend(chatId, formatReply(reply, duration, intent, engine), replyToMessageId);
     console.log(`[${chatId}] 处理完成 intent=${intent} (${duration}s)`);
 
   } catch (error) {
@@ -170,7 +181,8 @@ async function dispatch(
     session.sessionId = undefined;
     saveSession(chatId, userId, session);
     await trackSend(chatId,
-      `[来自AI] ❌ 处理失败: ${error instanceof Error ? error.message : String(error)}`
+      `[来自AI] ❌ 处理失败: ${error instanceof Error ? error.message : String(error)}`,
+      replyToMessageId
     );
   }
 }
@@ -185,7 +197,7 @@ async function processIndividual(message: FeishuMessage): Promise<void> {
   }
   const content = message.content.replace(/@\S+/g, '').trim();
   if (!content) return;
-  await dispatch(message.chat_id, message.sender_id, content, false);
+  await dispatch(message.chat_id, message.sender_id, content, false, message.message_id);
 }
 
 // ─── 模式二：shared ───────────────────────────────────────────────────────────
@@ -194,7 +206,7 @@ async function processShared(message: FeishuMessage): Promise<void> {
   const rawContent = message.content.replace(/@\S+/g, '').trim();
   if (!rawContent) return;
   const content = `[${message.sender_id}]: ${rawContent}`;
-  await dispatch(message.chat_id, `__shared__`, content, true);
+  await dispatch(message.chat_id, `__shared__`, content, true, message.message_id);
 }
 
 // ─── 消息入口 ────────────────────────────────────────────────────────────────

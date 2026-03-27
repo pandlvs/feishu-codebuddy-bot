@@ -13,7 +13,7 @@ const DEFAULT_SYSTEM_PROMPT = `你是一个友好的 AI 助手，回答用户的
 export async function handleGeneralQA(
   userMessage: string,
   session: Session
-): Promise<string> {
+): Promise<{ reply: string; engine: string }> {
   const handlerCfg = getHandlerConfig('generalQa');
 
   let prompt = '';
@@ -53,5 +53,5 @@ export async function handleGeneralQA(
   appendHistory(session, 'user', userMessage);
   appendHistory(session, 'assistant', text);
 
-  return text;
+  return { reply: text, engine: (config.apiBaseUrl || config.apiKey) ? 'API' : 'CLI' };
 }

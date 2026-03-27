@@ -12,6 +12,7 @@ function getClient(): Anthropic {
   if (!_client) {
     _client = new Anthropic({
       apiKey: config.apiKey || 'placeholder',
+      ...(config.apiAuthToken ? { authToken: config.apiAuthToken } : {}),
       ...(config.apiBaseUrl ? { baseURL: config.apiBaseUrl } : {}),
     });
   }
@@ -30,7 +31,7 @@ export async function callApi(options: ApiCallOptions): Promise<string> {
   let text = '';
   const stream = client.messages.stream({
     model,
-    max_tokens: 4096,
+    max_tokens: config.apiMaxTokens ?? 4096,
     system: options.systemPrompt,
     messages: options.messages,
   });
