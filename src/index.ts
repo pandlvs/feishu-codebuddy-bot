@@ -16,7 +16,7 @@ import { config } from './config';
 
 const POLL_INTERVAL = config.pollInterval ?? 5000;
 const WATCH_CHAT_IDS = config.watchChatIds;
-const ALLOWED_SENDER_IDS = config.allowedSenderIds ?? [];
+const GLOBAL_ALLOWED_SENDER_IDS = config.allowedSenderIds ?? [];
 const BOT_OPEN_ID = config.botOpenId ?? '';
 const DEFAULT_CHAT_MODE = config.defaultChatMode ?? 'individual';
 const OUT_OF_SCOPE_REPLY = config.outOfScopeReply ?? '抱歉，暂时还不支持，可以尝试把问题创建成飞书任务。';
@@ -208,7 +208,9 @@ async function processMessage(message: FeishuMessage): Promise<void> {
     return;
   }
 
-  if (ALLOWED_SENDER_IDS.length > 0 && !ALLOWED_SENDER_IDS.includes(message.sender_id)) {
+  const chatAllowedSenderIds = config.chats?.[message.chat_id]?.allowedSenderIds;
+  const effectiveAllowedIds = chatAllowedSenderIds ?? GLOBAL_ALLOWED_SENDER_IDS;
+  if (effectiveAllowedIds.length > 0 && !effectiveAllowedIds.includes(message.sender_id)) {
     console.log(`[${message.chat_id}] 忽略消息 (sender ${message.sender_id} 不在白名单)`);
     return;
   }
@@ -265,7 +267,7 @@ console.log('🚀 飞书Claude机器人启动');
 console.log(`   轮询间隔: ${POLL_INTERVAL}ms`);
 console.log(`   默认模式: ${DEFAULT_CHAT_MODE}`);
 console.log(`   监听群组: ${WATCH_CHAT_IDS.map(id => `${id}(${getChatMode(id)})`).join(', ')}`);
-console.log(`   允许用户: ${ALLOWED_SENDER_IDS.length > 0 ? ALLOWED_SENDER_IDS.join(', ') : '所有人'}`);
+console.log(`   全局允许用户: ${GLOBAL_ALLOWED_SENDER_IDS.length > 0 ? GLOBAL_ALLOWED_SENDER_IDS.join(', ') : '所有人'}`);
 console.log(`   机器人ID: ${BOT_OPEN_ID || '未配置'}`);
 console.log('');
 

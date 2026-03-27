@@ -7,6 +7,10 @@
   "defaultChatMode": "individual",
   "outOfScopeReply": "抱歉，暂时还不支持，可以尝试把问题创建成飞书任务。",
 
+  "apiBaseUrl": "https://your-codebuddy-proxy/v1",
+  "apiKey": "your-api-key",
+  "apiModel": "claude-sonnet-4-6",
+
   "claudeCliPath": "claude",
   "claudeCliModel": "claude-sonnet-4-6",
   "cliTimeoutMs": 120000,
@@ -24,12 +28,14 @@
     "oc_xxxxxxxx": {
       "mode": "individual",
       "capabilities": ["ngs-product-qa", "ngs-bug-fixer", "general-qa"],
-      "defaultIntent": ""
+      "defaultIntent": "",
+      "allowedSenderIds": []
     },
     "oc_yyyyyyyy": {
       "mode": "shared",
       "capabilities": ["general-qa"],
-      "defaultIntent": "general-qa"
+      "defaultIntent": "general-qa",
+      "allowedSenderIds": ["ou_xxxxxxxx"]
     }
   },
 

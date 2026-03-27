@@ -47,7 +47,10 @@ Copy `config.example.json` to `config.json` before running. Key fields:
 | `feishuMcpUrl` | Feishu MCP server StreamableHTTP URL (required) |
 | `watchChatIds` | Array of chat IDs to monitor (required) |
 | `botOpenId` | Bot's open_id for @mention detection (required for individual mode) |
-| `allowedSenderIds` | Array of user IDs to whitelist (empty = all) |
+| `apiBaseUrl` | Anthropic-compatible API base URL (e.g. CodeBuddy proxy) |
+| `apiKey` | API key for the above endpoint |
+| `apiModel` | Model to use via API (default: claude-sonnet-4-6) |
+| `allowedSenderIds` | Global user ID whitelist (empty = all); overridden per-chat |
 | `pollInterval` | Polling interval in ms (default: 5000) |
 | `defaultChatMode` | `individual` or `shared` (default: individual) |
 | `claudeCliPath` | Path to claude CLI executable (default: claude) |
@@ -60,7 +63,7 @@ Copy `config.example.json` to `config.json` before running. Key fields:
 | `defaultMaxTurns` | Default max turns for bug-fixer (default: 10) |
 | `knowledgeDir` | Directory containing markdown knowledge base (default: ./knowledge) |
 | `sessionsDir` | Directory for session storage (default: ./sessions) |
-| `chats` | Per-chat config: mode, capabilities, defaultIntent |
+| `chats` | Per-chat config: mode, capabilities, defaultIntent, allowedSenderIds |
 | `handlers` | Per-handler overrides: workingDir, allowedTools, disallowedTools, maxTurns, permissionMode |
 
 ## Chat Modes

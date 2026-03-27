@@ -12,6 +12,7 @@ export interface ChatConfig {
   defaultIntent?: string;
   allowedTools?: string;
   disallowedTools?: string;
+  allowedSenderIds?: string[];
 }
 
 export interface HandlerConfig {
@@ -31,6 +32,11 @@ export interface AppConfig {
   pollInterval?: number;
   defaultChatMode?: 'individual' | 'shared';
   outOfScopeReply?: string;
+
+  // Anthropic API（用于 router/general-qa/product-qa，替代 CLI 提速）
+  apiBaseUrl?: string;
+  apiKey?: string;
+  apiModel?: string;
 
   // Claude CLI
   claudeCliPath?: string;

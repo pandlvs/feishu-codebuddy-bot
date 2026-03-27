@@ -4,7 +4,8 @@
 
 import { HistoryMessage, Intent } from './session-store';
 import { runCli } from './cli-runner';
-import { getHandlerConfig, loadPrompt } from './config';
+import { callApi } from './api-client';
+import { config, getHandlerConfig, loadPrompt } from './config';
 
 export interface RouteResult {
   intent: Intent;
@@ -39,13 +40,15 @@ export async function route(
   prompt += `当前消息：${userMessage}\n\n请分析意图并返回 JSON。`;
 
   const systemPrompt = loadPrompt('router', DEFAULT_SYSTEM_PROMPT);
-  console.log('[Router] 使用 Claude CLI 引擎');
-  const { text } = await runCli({
-    prompt,
-    systemPrompt,
-    maxTurns: 1,
-    cwd: handlerCfg.workingDir,
-  });
+  let text: string;
+  if (config.apiBaseUrl || config.apiKey) {
+    console.log('[Router] 使用 API 引擎');
+    text = await callApi({ systemPrompt, messages: [{ role: 'user', content: prompt }] });
+  } else {
+    console.log('[Router] 使用 Claude CLI 引擎');
+    const result = await runCli({ prompt, systemPrompt, maxTurns: 1, cwd: handlerCfg.workingDir });
+    text = result.text;
+  }
 
   const json = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] ?? text);
 
