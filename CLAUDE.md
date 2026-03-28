@@ -23,16 +23,17 @@ npm start        # Run compiled output
 - `src/index.ts` — Main entry point, polling loop, message routing; replies to original message via `replyMessage`
 - `src/config.ts` — Config loader (reads config.json)
 - `src/feishu-mcp-client.ts` — Feishu MCP client; `sendMessage` and `replyMessage`
-- `src/api-client.ts` — Anthropic SDK wrapper with streaming support and custom baseURL
+- `src/api-client.ts` — Anthropic SDK wrapper; `callApi` (streaming) and `callApiWithTools` (tool use loop)
+- `src/intellij-mcp-client.ts` — IntelliJ Index MCP client (SSE); `getIntellijTools` and `callIntellijTool`
 - `src/router.ts` — Intent classification (API if configured, else CLI)
 - `src/cli-runner.ts` — CLI subprocess runner (spawn claude, stdin/stdout)
 - `src/session-store.ts` — Local session file storage (sessions/{chatId}/{userId}.json)
 
 ### Handlers
 
-- `src/handlers/product-qa.ts` — Product Q&A with RAG (API or CLI); returns `{ reply, engine }`
+- `src/handlers/product-qa.ts` — Product Q&A with RAG; uses API+IntelliJ tools if both configured, else API, else CLI
 - `src/handlers/bug-fixer.ts` — Bug fixing with Claude CLI; returns `{ reply, engine, newState, sessionId }`
-- `src/handlers/general-qa.ts` — General Q&A (API or CLI); returns `{ reply, engine }`
+- `src/handlers/general-qa.ts` — General Q&A; uses API+IntelliJ tools if both configured, else API, else CLI
 
 ### Knowledge Base
 
@@ -53,6 +54,8 @@ Copy `config.example.json` to `config.json` before running. Key fields:
 | `apiAuthToken` | Auth token (alternative to apiKey, passed as Bearer token) |
 | `apiModel` | Model to use via API (default: claude-sonnet-4-6) |
 | `apiMaxTokens` | Max tokens for API calls (default: 4096) |
+| `intellijMcpUrl` | IntelliJ Index MCP SSE URL (e.g. http://127.0.0.1:29170/index-mcp/sse) |
+| `intellijProjectPath` | Project root path passed to IntelliJ MCP tools (optional if single project open) |
 | `allowedSenderIds` | Global user ID whitelist (empty = all); overridden per-chat |
 | `pollInterval` | Polling interval in ms (default: 5000) |
 | `defaultChatMode` | `individual` or `shared` (default: individual) |
@@ -100,7 +103,28 @@ Configure per-chat capabilities and default intent:
 
 ## Key Dependencies
 
-- `@modelcontextprotocol/sdk` — MCP protocol support (Feishu MCP client)
+- `@modelcontextprotocol/sdk` — MCP protocol support (Feishu MCP client + IntelliJ MCP client)
+- `@anthropic-ai/sdk` — Anthropic API client with streaming and tool use support
+
+## IntelliJ MCP Tools
+
+When `intellijMcpUrl` is configured, `product-qa` and `general-qa` gain access to these read-only tools:
+
+| Tool | Description |
+|---|---|
+| `ide_find_class` | Search classes/interfaces by name (supports camelCase, wildcard) |
+| `ide_find_file` | Search files by name |
+| `ide_search_text` | Full-text search using IDE word index |
+| `ide_find_definition` | Go to definition (file, line, column) |
+| `ide_find_implementations` | Find all implementations of interface/abstract class |
+| `ide_find_super_methods` | Find parent methods in inheritance chain |
+| `ide_find_references` | Find all usages of a symbol |
+| `ide_call_hierarchy` | Build caller/callee tree for a method |
+| `ide_type_hierarchy` | Get full inheritance hierarchy of a class |
+| `ide_diagnostics` | Get errors/warnings in a file |
+| `ide_index_status` | Check if IDE index is ready |
+
+Refactoring tools (`ide_refactor_rename`, `ide_refactor_safe_delete`) are intentionally excluded.
 
 ## Session Storage
 

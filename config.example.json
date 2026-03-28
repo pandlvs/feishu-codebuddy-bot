@@ -13,6 +13,9 @@
   "apiModel": "claude-sonnet-4-6",
   "apiMaxTokens": 4096,
 
+  "intellijMcpUrl": "http://127.0.0.1:29170/index-mcp/sse",
+  "intellijProjectPath": "/path/to/your/java/project",
+
   "claudeCliPath": "claude",
   "claudeCliModel": "claude-sonnet-4-6",
   "cliTimeoutMs": 120000,

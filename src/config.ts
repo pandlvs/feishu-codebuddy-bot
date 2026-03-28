@@ -40,6 +40,10 @@ export interface AppConfig {
   apiModel?: string;
   apiMaxTokens?: number;
 
+  // IntelliJ MCP（代码搜索/导航，用于 product-qa/general-qa）
+  intellijMcpUrl?: string;
+  intellijProjectPath?: string;
+
   // Claude CLI
   claudeCliPath?: string;
   claudeCliModel?: string;

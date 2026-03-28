@@ -1,14 +1,22 @@
 /**
  * general-qa handler
  * 回答普通问题
+ * 配置了 intellijMcpUrl 时，额外提供代码搜索/导航工具
  */
 
 import { Session, appendHistory } from '../session-store';
 import { runCli } from '../cli-runner';
-import { callApi } from '../api-client';
+import { callApi, callApiWithTools, ToolDefinition } from '../api-client';
 import { config, getHandlerConfig, loadPrompt } from '../config';
+import { getIntellijTools, callIntellijTool } from '../intellij-mcp-client';
 
-const DEFAULT_SYSTEM_PROMPT = `你是一个友好的 AI 助手，回答用户的各类问题。回答简洁、准确。`;
+const DEFAULT_SYSTEM_PROMPT = `你是一个友好的 AI 助手，回答用户的各类问题。回答简洁、准确。
+如果问题涉及代码，可以使用代码搜索工具查找相关实现后再回答。
+
+使用代码工具的策略：
+1. 先用 ide_find_class 或 ide_search_text 定位相关类/接口
+2. 再用 ide_find_definition 查看具体实现
+3. 必要时用 ide_find_references 了解调用方式`;
 
 export async function handleGeneralQA(
   userMessage: string,
@@ -30,12 +38,29 @@ export async function handleGeneralQA(
   let text: string;
 
   if (config.apiBaseUrl || config.apiKey) {
-    console.log('[GeneralQA] 使用 API 引擎');
     const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [
       ...session.history.slice(-10).map(h => ({ role: h.role, content: h.content })),
       { role: 'user', content: userMessage },
     ];
-    text = await callApi({ systemPrompt, messages });
+
+    if (config.intellijMcpUrl) {
+      console.log('[GeneralQA] 使用 API + IntelliJ 工具引擎');
+      const intellijTools = await getIntellijTools();
+      const tools: ToolDefinition[] = intellijTools.map(t => ({
+        name: t.name,
+        description: t.description,
+        input_schema: t.inputSchema,
+      }));
+      text = await callApiWithTools({
+        systemPrompt,
+        messages,
+        tools,
+        executeTool: (name, input) => callIntellijTool(name, input),
+      });
+    } else {
+      console.log('[GeneralQA] 使用 API 引擎');
+      text = await callApi({ systemPrompt, messages });
+    }
   } else {
     console.log('[GeneralQA] 使用 Claude CLI 引擎');
     const result = await runCli({
@@ -53,5 +78,8 @@ export async function handleGeneralQA(
   appendHistory(session, 'user', userMessage);
   appendHistory(session, 'assistant', text);
 
-  return { reply: text, engine: (config.apiBaseUrl || config.apiKey) ? 'API' : 'CLI' };
+  const engine = !(config.apiBaseUrl || config.apiKey) ? 'CLI'
+    : config.intellijMcpUrl ? 'API+IntelliJ'
+    : 'API';
+  return { reply: text, engine };
 }
