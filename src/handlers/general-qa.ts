@@ -9,6 +9,7 @@ import { runCli } from '../cli-runner';
 import { callApi, callApiWithTools, ToolDefinition } from '../api-client';
 import { config, getHandlerConfig, loadPrompt } from '../config';
 import { getIntellijTools, callIntellijTool } from '../intellij-mcp-client';
+import { searchFiles, formatFileSearchResults } from '../knowledge/file-searcher';
 
 const DEFAULT_SYSTEM_PROMPT = `你是一个友好的 AI 助手，回答用户的各类问题。回答简洁、准确。
 如果问题涉及代码，可以使用代码搜索工具查找相关实现后再回答。
@@ -43,21 +44,38 @@ export async function handleGeneralQA(
       { role: 'user', content: userMessage },
     ];
 
-    if (config.intellijMcpUrl) {
+    if (config.intellijMcpUrl && config.apiToolsEnabled !== false) {
       console.log('[GeneralQA] 使用 API + IntelliJ 工具引擎');
-      const intellijTools = await getIntellijTools();
-      const tools: ToolDefinition[] = intellijTools.map(t => ({
-        name: t.name,
-        description: t.description,
-        input_schema: t.inputSchema,
-      }));
-      text = await callApiWithTools({
-        systemPrompt,
-        messages,
-        tools,
-        executeTool: (name, input) => callIntellijTool(name, input),
-      });
+      let intellijTools: ToolDefinition[] = [];
+      try {
+        const tools = await getIntellijTools();
+        intellijTools = tools.map(t => ({
+          name: t.name,
+          description: t.description,
+          input_schema: t.inputSchema,
+        }));
+      } catch (e) {
+        console.warn('[GeneralQA] IntelliJ MCP 不可用，降级到文件搜索:', (e as Error).message);
+      }
+
+      if (intellijTools.length > 0) {
+        text = await callApiWithTools({
+          systemPrompt,
+          messages,
+          tools: intellijTools,
+          executeTool: (name, input) => callIntellijTool(name, input),
+        });
+      } else {
+        const fileContext = buildFileSearchContext(userMessage, handlerCfg.workingDir);
+        const lastMsg = messages[messages.length - 1];
+        if (fileContext) lastMsg.content += '\n\n' + fileContext;
+        console.log('[GeneralQA] 使用 API + 文件搜索引擎');
+        text = await callApi({ systemPrompt, messages });
+      }
     } else {
+      const fileContext = buildFileSearchContext(userMessage, handlerCfg.workingDir);
+      const lastMsg = messages[messages.length - 1];
+      if (fileContext) lastMsg.content += '\n\n' + fileContext;
       console.log('[GeneralQA] 使用 API 引擎');
       text = await callApi({ systemPrompt, messages });
     }
@@ -79,7 +97,18 @@ export async function handleGeneralQA(
   appendHistory(session, 'assistant', text);
 
   const engine = !(config.apiBaseUrl || config.apiKey) ? 'CLI'
-    : config.intellijMcpUrl ? 'API+IntelliJ'
+    : (config.intellijMcpUrl && config.apiToolsEnabled !== false) ? 'API+IntelliJ'
     : 'API';
   return { reply: text, engine };
+}
+
+function buildFileSearchContext(query: string, workingDir: string): string {
+  if (!workingDir) return '';
+  const keywords = query
+    .toLowerCase()
+    .split(/[\s，。？！、；：,.?!;:()\-_/\\]+/)
+    .map(s => s.trim())
+    .filter(s => s.length >= 2);
+  const results = searchFiles(workingDir, keywords);
+  return formatFileSearchResults(results);
 }

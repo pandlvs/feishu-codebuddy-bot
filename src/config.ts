@@ -39,6 +39,7 @@ export interface AppConfig {
   apiAuthToken?: string;
   apiModel?: string;
   apiMaxTokens?: number;
+  apiToolsEnabled?: boolean; // 是否启用 tool use（默认 true，代理不支持时设为 false）
 
   // IntelliJ MCP（代码搜索/导航，用于 product-qa/general-qa）
   intellijMcpUrl?: string;
@@ -59,7 +60,7 @@ export interface AppConfig {
   defaultMaxTurns?: number;
 
   // 存储
-  knowledgeDir?: string;
+  knowledgeDir?: string | string[];
   sessionsDir?: string;
 
   // 群聊配置

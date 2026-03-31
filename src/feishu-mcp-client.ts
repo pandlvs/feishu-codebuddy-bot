@@ -20,24 +20,50 @@ async function getClient(): Promise<Client> {
   client = new Client({ name: 'feishu-codebuddy-bot', version: '1.0.0' });
   await client.connect(transport);
   console.log('[FeishuMCP] 已连接到飞书远程MCP服务器');
+  // Log available tools for debugging
+  try {
+    const { tools } = await client.listTools();
+    console.log(`[FeishuMCP] 可用工具: ${tools.map(t => t.name).join(', ')}`);
+  } catch (e) {
+    console.warn('[FeishuMCP] 无法列出工具:', (e as Error).message);
+  }
   return client;
 }
 
 async function callFeishuMcp<T = any>(tool: string, args: Record<string, any>): Promise<T> {
-  const c = await getClient();
-  const result = await c.callTool({ name: tool, arguments: args });
-  if (result.content && Array.isArray(result.content)) {
-    const text = result.content
-      .filter((b: any) => b.type === 'text')
-      .map((b: any) => b.text)
-      .join('');
+  // Retry once on connection errors (session may have expired)
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let c: Client;
     try {
-      return JSON.parse(text) as T;
-    } catch {
-      return text as unknown as T;
+      c = await getClient();
+    } catch (err) {
+      client = null;
+      throw err;
+    }
+    try {
+      const result = await c.callTool({ name: tool, arguments: args });
+      if (result.content && Array.isArray(result.content)) {
+        const text = result.content
+          .filter((b: any) => b.type === 'text')
+          .map((b: any) => b.text)
+          .join('');
+        try {
+          return JSON.parse(text) as T;
+        } catch {
+          return text as unknown as T;
+        }
+      }
+      return result as unknown as T;
+    } catch (err) {
+      client = null;
+      if (attempt === 0) {
+        console.warn(`[FeishuMCP] 工具调用失败，重试中... (${tool}):`, (err as Error).message);
+        continue;
+      }
+      throw err;
     }
   }
-  return result as unknown as T;
+  throw new Error('unreachable');
 }
 
 export interface FeishuMessage {

@@ -5,6 +5,7 @@
  */
 
 import { search } from '../knowledge/retriever';
+import { searchFiles, formatFileSearchResults } from '../knowledge/file-searcher';
 import { Session, appendHistory } from '../session-store';
 import { runCli } from '../cli-runner';
 import { callApi, callApiWithTools, ToolDefinition } from '../api-client';
@@ -57,21 +58,40 @@ export async function handleProductQA(
       { role: 'user', content: userContent },
     ];
 
-    if (config.intellijMcpUrl) {
+    if (config.intellijMcpUrl && config.apiToolsEnabled !== false) {
       console.log('[ProductQA] 使用 API + IntelliJ 工具引擎');
-      const intellijTools = await getIntellijTools();
-      const tools: ToolDefinition[] = intellijTools.map(t => ({
-        name: t.name,
-        description: t.description,
-        input_schema: t.inputSchema,
-      }));
-      text = await callApiWithTools({
-        systemPrompt,
-        messages,
-        tools,
-        executeTool: (name, input) => callIntellijTool(name, input),
-      });
+      let intellijTools: ToolDefinition[] = [];
+      try {
+        const tools = await getIntellijTools();
+        intellijTools = tools.map(t => ({
+          name: t.name,
+          description: t.description,
+          input_schema: t.inputSchema,
+        }));
+      } catch (e) {
+        console.warn('[ProductQA] IntelliJ MCP 不可用，降级到文件搜索:', (e as Error).message);
+      }
+
+      if (intellijTools.length > 0) {
+        text = await callApiWithTools({
+          systemPrompt,
+          messages,
+          tools: intellijTools,
+          executeTool: (name, input) => callIntellijTool(name, input),
+        });
+      } else {
+        // IntelliJ 不可用，用文件关键字搜索补充上下文
+        const fileContext = buildFileSearchContext(userMessage, handlerCfg.workingDir);
+        const lastMsg = messages[messages.length - 1];
+        if (fileContext) lastMsg.content += '\n\n' + fileContext;
+        console.log('[ProductQA] 使用 API + 文件搜索引擎');
+        text = await callApi({ systemPrompt, messages });
+      }
     } else {
+      // 无 IntelliJ，用文件关键字搜索补充上下文
+      const fileContext = buildFileSearchContext(userMessage, handlerCfg.workingDir);
+      const lastMsg = messages[messages.length - 1];
+      if (fileContext) lastMsg.content += '\n\n' + fileContext;
       console.log('[ProductQA] 使用 API 引擎');
       text = await callApi({ systemPrompt, messages });
     }
@@ -93,7 +113,18 @@ export async function handleProductQA(
   appendHistory(session, 'assistant', text);
 
   const engine = !(config.apiBaseUrl || config.apiKey) ? 'CLI'
-    : config.intellijMcpUrl ? 'API+IntelliJ'
+    : (config.intellijMcpUrl && config.apiToolsEnabled !== false) ? 'API+IntelliJ'
     : 'API';
   return { reply: text, engine };
+}
+
+function buildFileSearchContext(query: string, workingDir: string): string {
+  if (!workingDir) return '';
+  const keywords = query
+    .toLowerCase()
+    .split(/[\s，。？！、；：,.?!;:()\-_/\\]+/)
+    .map(s => s.trim())
+    .filter(s => s.length >= 2);
+  const results = searchFiles(workingDir, keywords);
+  return formatFileSearchResults(results);
 }

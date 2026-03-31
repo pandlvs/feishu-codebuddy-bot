@@ -12,6 +12,7 @@
   "apiAuthToken": "your-auth-token",
   "apiModel": "claude-sonnet-4-6",
   "apiMaxTokens": 4096,
+  "apiToolsEnabled": true,
 
   "intellijMcpUrl": "http://127.0.0.1:29170/index-mcp/sse",
   "intellijProjectPath": "/path/to/your/java/project",
@@ -26,7 +27,7 @@
   "defaultPermissionMode": "acceptEdits",
   "defaultMaxTurns": 10,
 
-  "knowledgeDir": "./knowledge",
+  "knowledgeDir": ["./knowledge", "./knowledge2"],
   "sessionsDir": "./sessions",
 
   "chats": {

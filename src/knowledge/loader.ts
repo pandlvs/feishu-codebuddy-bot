@@ -4,6 +4,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { config } from '../config';
 
 export interface KnowledgeDoc {
   filePath: string;
@@ -11,21 +12,29 @@ export interface KnowledgeDoc {
   content: string;
 }
 
-const KNOWLEDGE_DIR = process.env.KNOWLEDGE_DIR || './knowledge';
+function getKnowledgeDirs(): string[] {
+  const raw = config.knowledgeDir;
+  if (!raw) return ['./knowledge'];
+  return (Array.isArray(raw) ? raw : [raw]).filter(Boolean);
+}
 
 let cachedDocs: KnowledgeDoc[] | null = null;
 
 export function loadDocs(): KnowledgeDoc[] {
   if (cachedDocs) return cachedDocs;
 
-  if (!fs.existsSync(KNOWLEDGE_DIR)) {
-    console.warn(`[knowledge] 知识库目录不存在: ${KNOWLEDGE_DIR}`);
-    return [];
+  const dirs = getKnowledgeDirs();
+  const docs: KnowledgeDoc[] = [];
+
+  for (const dir of dirs) {
+    if (!fs.existsSync(dir)) {
+      console.warn(`[knowledge] 知识库目录不存在: ${dir}`);
+      continue;
+    }
+    collectMarkdown(dir, docs);
   }
 
-  const docs: KnowledgeDoc[] = [];
-  collectMarkdown(KNOWLEDGE_DIR, docs);
-  console.log(`[knowledge] 加载了 ${docs.length} 个文档`);
+  console.log(`[knowledge] 加载了 ${docs.length} 个文档 (目录: ${dirs.join(', ')})`);
   cachedDocs = docs;
   return docs;
 }
